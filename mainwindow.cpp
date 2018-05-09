@@ -82,6 +82,8 @@ int ind_c[8], ind_p;
 int dim_in=16,dim_out=8;
 int perc_dim=8;
 
+void getCrossCorr(vector<float>& x,vector<float>& y);
+
 void convertFromVec(vector<float>& x,float* y, float scale)
 {
     for(int j=0;j<perc_dim;j++)
@@ -184,7 +186,15 @@ void MainWindow::buttonClicked(int j)
 
 void MainWindow::keyPressEvent(QKeyEvent *event)
 {
-    static float e1,e2,e3 ,e4;
+    static float e1,e2,ee1,ee2,
+            e3 ,e4, ee3 ,ee4;
+
+    if(event->text()=="l")
+    {
+        for(int i=0;i<dataEMG[LE_cor1->text().toInt()].size();i++)
+            qDebug()<<((dataEMG[LE_cor1->text().toInt()][i]>0)?1:(-1))*dataEMG[LE_cor1->text().toInt()][i]<<
+                                                                                                             " "<<((dataEMG[LE_cor1->text().toInt()][i]>0)?1:(-1))*dataEMG[LE_cor2->text().toInt()][i];
+    }
     if(event->text()=="t")
     {
         test_on=!test_on;
@@ -193,37 +203,59 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     if(event->text()=="e")
     {
         e1=0;e2=0;
+        ee1=0;ee2=0;
         for(int i=0;i<dataEMG[LE_cor1->text().toInt()].size();i++)
         {
             //            if(dataEMG[LE_cor1->text().toInt()][i]>0)
-            e1+=fabs(dataEMG[LE_cor1->text().toInt()][i]);
+            {
+                e1+=((dataEMG[LE_cor1->text().toInt()][i]>0)?1:(-1))*(dataEMG[LE_cor1->text().toInt()][i]);
+                e2+=((dataEMG[LE_cor1->text().toInt()][i]>0)?1:(-1))*(dataEMG[LE_cor2->text().toInt()][i]);
 
-            //            if(dataEMG[LE_cor2->text().toInt()][i]>0)
-            e2+=fabs(dataEMG[LE_cor2->text().toInt()][i]);
+                ee1+=((dataEMG[LE_cor2->text().toInt()][i]>0)?1:(-1))*(dataEMG[LE_cor1->text().toInt()][i]);
+                ee2+=((dataEMG[LE_cor2->text().toInt()][i]>0)?1:(-1))*(dataEMG[LE_cor2->text().toInt()][i]);
+            }
+        }
+        if((ee1*ee1+ee2*ee2)>(e1*e1+e2*e2))
+        {
+            e1=ee1;e2=ee2;
         }
         //        float l=sqrt(e1*e1+e2*e2);
+        qDebug()<<"e1 e2 = "<<e1<<" "<<e2;
     }
     if(event->text()=="w")
     {
         e3=0;e4=0;
+        ee3=0;ee4=0;
         for(int i=0;i<dataEMG[LE_cor1->text().toInt()].size();i++)
         {
-            e3+=abs(dataEMG[LE_cor1->text().toInt()][i]);
-            e4+=abs(dataEMG[LE_cor2->text().toInt()][i]);
-            //            e3=0;
-            //            e4=1;
-        }
+            //            if(dataEMG[LE_cor1->text().toInt()][i]>0)
+            {
+                e3+=((dataEMG[LE_cor1->text().toInt()][i]>0)?1:(-1))*(dataEMG[LE_cor1->text().toInt()][i]);
+                e4+=((dataEMG[LE_cor1->text().toInt()][i]>0)?1:(-1))*(dataEMG[LE_cor2->text().toInt()][i]);
 
+                ee3+=((dataEMG[LE_cor2->text().toInt()][i]>0)?1:(-1))*(dataEMG[LE_cor1->text().toInt()][i]);
+                ee4+=((dataEMG[LE_cor2->text().toInt()][i]>0)?1:(-1))*(dataEMG[LE_cor2->text().toInt()][i]);
+            }
+        }
+        if((ee3*ee3+ee4*ee4)>(e3*e3+e4*e4))
+        {
+            e3=ee3;e4=ee4;
+        }
+        qDebug()<<"e3 e4 = "<<e1<<" "<<e2;
         LTR=linearTr(e1,e2,e3,e4);
         LTR.inv();
+    }
+    if(event->text()=="c")
+    {
+        //        getCrossCorr(featureEMG[LE_cor1->text().toInt()][0],featureEMG[LE_cor2->text().toInt()][0]);
+        getCrossCorr(dataEMG[LE_cor1->text().toInt()], dataEMG[LE_cor2->text().toInt()]);
     }
 }
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent)
 {
-    difEMG.resize(bufShowSize);
-    LTR.inv();
+
 
 
     slider_x=new QSlider;
@@ -461,9 +493,16 @@ MainWindow::MainWindow(QWidget *parent) :
     int ii2=150*EMG_scale;
     set_plot->setAxisScale(QwtPlot::xBottom,-ii2,ii2);
     set_plot->setAxisScale(QwtPlot::yLeft,-ii2,ii2);
-    set_plot->setAxisTitle(QwtPlot::yLeft,"EMG2, mV");
-    set_plot->setAxisTitle(QwtPlot::xBottom,"EMG1, mV");
-    //    set_plot->set
+    set_plot->setAxisTitle(QwtPlot::yLeft,"f1 (a.u.)");
+    set_plot->setAxisTitle(QwtPlot::xBottom,"f2 (a.u.)");
+
+    QPalette Pal(palette());
+
+    // устанавливаем цвет фона
+    Pal.setColor(QPalette::Background, Qt::white);
+    set_plot->setAutoFillBackground(true);
+    set_plot->setPalette(Pal);
+
     set_plot->show();
 
 
@@ -484,6 +523,10 @@ MainWindow::MainWindow(QWidget *parent) :
     rms_plot->setAxisTitle(QwtPlot::xBottom,"RMS_1");
     rms_plot->setMinimumSize(QSize(300,300));
     drawingInit(rms_plot,"root mean square");
+
+
+    difEMG.resize(bufShowSize);
+    LTR.inv();
     rms_plot->show();
 
     rmsCurve=new myCurve(bufShowSize, percBuf,rms_plot,"perc out", Qt::black, QColor(0,0,0,0),ind_p);
@@ -721,6 +764,7 @@ void MainWindow::drawingInit(QwtPlot* d_plot, QString title)
     d_plot->setAxisScale(1,-500,500,200);
     d_plot->setTitle( *qwtt ); // заголовок
     d_plot->setCanvasBackground( Qt::white ); // цвет фона
+    //    d_plot->set
 
 
     // Включить сетку
@@ -759,10 +803,11 @@ int thresh(float x)
         return 0;
     return x;
 }
+
 void getCrossCorr(vector<float>& x,vector<float>& y)
 {
     float cc=0, a1=0, a2=0;
-    float c1=0;c2=0;
+    float c1=0, c2=0;
 
     for(int i=0;i<bufShowSize;i++)
         c1+=x[i];
@@ -777,10 +822,10 @@ void getCrossCorr(vector<float>& x,vector<float>& y)
         cc+=(x[i]-c1)*(y[i]-c2);
 
     for(int i=0;i<bufShowSize;i++)
-        a1+=(x[i]-c1);
+        a1+=(x[i]-c1)*(x[i]-c1);
 
     for(int i=0;i<bufShowSize;i++)
-        a2+=(y[i]-c2);
+        a2+=(y[i]-c2)*(y[i]-c2);
 
     qDebug()<<cc/sqrt(a1*a2);
 }
